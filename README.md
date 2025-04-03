@@ -16,3 +16,18 @@
 ## Potencjalne idee:
 - reguły asocjacyjne
 - knn
+
+## Miary ewaluacyjne
+Ranking z zakrytymi filmami: 
+- normalized discounted cumulative gain (ndcg)
+- mean reciprocal rank (mrr)
+- average precision
+- average first positive rank
+
+Przygotować pipeline:
+- normalizacja
+- czyszczenie
+- zbiory testowe/treningowe
+- budowa modelu
+- dopasowanie modelu do danych (fit)
+- testowanie
