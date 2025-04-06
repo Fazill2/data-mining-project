@@ -174,3 +174,10 @@ cython_debug/
 .pypirc
 
 .idea
+
+/data/checksums.txt
+/data/links.csv
+/data/movies.csv
+/data/ratings.csv
+/data/tags.csv
+/data/README.txt
