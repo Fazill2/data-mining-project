@@ -1,0 +1,7 @@
+
+def get_genres():
+    return ["Action", "Adventure", "Animation",
+            "Children", "Comedy", "Crime", "Documentary",
+            "Drama", "Fantasy", "Film-Noir", "Horror",
+            "IMAX", "Musical", "Mystery", "Romance",
+            "Sci-Fi", "Thriller", "War", "Western", "(no genres listed)"]
