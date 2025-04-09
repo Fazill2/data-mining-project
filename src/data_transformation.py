@@ -1,4 +1,4 @@
-from common import get_genres
+from src.common import get_genres
 import pandas as pd
 
 class DataTransformer:

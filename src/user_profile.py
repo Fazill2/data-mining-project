@@ -1,5 +1,5 @@
 import pandas as pd
-from common import get_genres
+from src.common import get_genres
 import numpy as np
 
 class UserProfileCreator:
@@ -13,7 +13,7 @@ class UserProfileCreator:
         profile[['low_rating', 'medium_rating', 'high_rating']] = profile[['low_rating', 'medium_rating', 'high_rating']] / (2 *profile[['low_rating', 'medium_rating', 'high_rating']].sum())
 
         # normalize all other values
-        norm = np.linalg.norm(profile)
+        norm = profile.sum()
         for genre in get_genres():
             profile[genre] = profile[genre] / norm
 
