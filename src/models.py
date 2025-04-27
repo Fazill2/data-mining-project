@@ -97,8 +97,6 @@ class AprioriKmeansRecommender:
             recommended_genres.update(consequents)
             for genre in consequents:
                 conf_map[genre] = conf_map.get(genre, 0) + confidence
-            if len(recommended_genres) >= top_n:
-                break
 
         candidate_movies = self.item_data.copy()
         candidate_movies['supported'] = 0

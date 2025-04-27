@@ -131,4 +131,43 @@ class RankingTest:
         pearson_corr = merged['rating'].corr(merged['score'], method='pearson')
         return pearson_corr
 
+    @staticmethod
+    def calculate_rr(user_ratings: pd.DataFrame, ranking: pd.Series) -> float:
+        """
+        Calculates the Reciprocal Rank (RR) for the given user ratings and ranking.
+
+        Parameters:
+        user_ratings (pd.Series): The user ratings.
+        ranking (pd.DataFrame): The ranked movies.
+
+        Returns:
+        float: The RR score.
+        """
+        # Calculate RR
+        rr = 0
+        for i, movie in enumerate(ranking.index):
+            if movie in user_ratings['movieId'].values:
+                rr = 1 / (i + 1)
+                break
+
+
+        return rr
+
+    @staticmethod
+    def calculate_mrr(user_ratings: pd.DataFrame, rankings: dict[str, pd.DataFrame]) -> float:
+        """
+        Calculates the Mean Reciprocal Rank (MRR) for the given user ratings and rankings.
+
+        Parameters:
+        user_ratings (pd.Series): The user ratings.
+        rankings (dict[str, pd.DataFrame]): The ranked movies.
+
+        Returns:
+        float: The MRR score.
+        """
+        mrr = 0
+        for user, ranking in rankings:
+            mrr += RankingTest.calculate_rr(user_ratings[user_ratings['userId'] == user], ranking)
+
+        return mrr / len(rankings)
 
