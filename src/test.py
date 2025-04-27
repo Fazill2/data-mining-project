@@ -20,7 +20,7 @@ class RankingTest:
         return train_set, test_set, selected_user_ids
 
     @staticmethod
-    def get_test_user_ids(ratings: pd.DataFrame, n=0.1) -> list:
+    def get_test_user_ids(ratings: pd.DataFrame, n=0.01) -> list:
         """
         Selects a subset of user IDs for testing based on the specified ratio.
 
@@ -95,3 +95,40 @@ class RankingTest:
             raise e
 
         return ndcg
+
+    @staticmethod
+    def calculate_spearman_corr(user_ratings: pd.DataFrame, ranking: pd.Series) -> float:
+        """
+        Calculates the Spearman correlation coefficient between the user ratings and the ranking.
+
+        Parameters:
+        user_ratings (pd.Series): The user ratings.
+        ranking (pd.DataFrame): The ranked movies.
+
+        Returns:
+        float: The Spearman correlation coefficient.
+        """
+        merged = pd.merge(user_ratings, ranking, on='movieId', suffixes=('_rating', '_ranking'))
+
+        spearman_corr = merged['rating'].corr(merged['score'], method='spearman')
+        print(merged)
+        return spearman_corr
+
+    @staticmethod
+    def calculate_pearson_corr(user_ratings: pd.DataFrame, ranking: pd.Series) -> float:
+        """
+        Calculates the Pearson correlation coefficient between the user ratings and the ranking.
+
+        Parameters:
+        user_ratings (pd.Series): The user ratings.
+        ranking (pd.DataFrame): The ranked movies.
+
+        Returns:
+        float: The Pearson correlation coefficient.
+        """
+        merged = pd.merge(user_ratings, ranking, on='movieId', suffixes=('_rating', '_ranking'))
+
+        pearson_corr = merged['rating'].corr(merged['score'], method='pearson')
+        return pearson_corr
+
+
