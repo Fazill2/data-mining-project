@@ -7,7 +7,6 @@ class DataTransformer:
         transformed_movies_df: pd.DataFrame = DataTransformer.transform_movies(movies_df)
         transformed_ratings_df: pd.DataFrame  = DataTransformer.transform_ratings(ratings_df)
         merged_df: pd.DataFrame = pd.merge(transformed_movies_df, transformed_ratings_df, on='movieId', how='left')
-        merged_df = DataTransformer.add_rating_percentiles(merged_df)
         movie_rec_df = merged_df.drop(columns=['title', 'year', 'rating'])
         movie_rec_df.set_index('movieId', inplace=True)
 
