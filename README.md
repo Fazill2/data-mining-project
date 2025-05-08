@@ -29,3 +29,16 @@ Przygotować pipeline:
 - budowa modelu
 - dopasowanie modelu do danych (fit)
 - testowanie
+
+
+# Do rozważenia
+Obecnie mamy bias na filmy z dużą liczbą gatunków
+
+# Prezentacja (w powerpoint)
+- zdefiniować problem
+- określić zbiory danych
+- zdefiniować miary ewaluacjne
+- propozycje rozwiązania
+- opisać proces trenowania (ile trwa itd)
+- przedstawić wyniki ewaluacyjne
+- wnioski
