@@ -31,7 +31,7 @@ class RankingTest:
         Returns:
         list: A list of selected user IDs.
         """
-        user_ids = ratings.index.unique()
+        user_ids = ratings['userId'].unique()
         selected_user_ids = np.random.choice(user_ids, size=int(len(user_ids) * n), replace=False)
         return selected_user_ids
 
