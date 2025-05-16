@@ -108,10 +108,14 @@ class RankingTest:
         Returns:
         float: The Spearman correlation coefficient.
         """
+        user_highest_rating = user_ratings['rating'].max()
+        threshold = 4 if user_highest_rating >= 4 else user_highest_rating - 0.5
         merged = pd.merge(user_ratings, ranking, on='movieId', suffixes=('_rating', '_ranking'))
+        merged['rating'] = merged['rating'] > threshold
+        merged.at[merged.index[0], 'rating'] = True
+        merged.at[merged.index[-1], 'rating'] = False
 
         spearman_corr = merged['rating'].corr(merged['score'], method='spearman')
-        print(merged)
         return spearman_corr
 
     @staticmethod
