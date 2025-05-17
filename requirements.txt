@@ -1,5 +1,8 @@
 pandas~=2.2.3
 matplotlib~=3.10.1
-numpy~=2.2.4
+numpy~=1.26.4
 seaborn~=0.13.2
 scikit-learn~=1.6.1
+mlxtend~=0.23.4
+scipy~=1.15.2
+scikit-surprise~=1.1.4

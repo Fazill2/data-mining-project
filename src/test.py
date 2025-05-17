@@ -3,60 +3,33 @@ import pandas as pd
 
 class RankingTest:
     @staticmethod
-    def split_ratings_into_train_test(ratings: pd.DataFrame, n=0.1) -> (pd.DataFrame, pd.DataFrame, list):
+    def split_ratings_into_train_test(ratings: pd.DataFrame, k=5, seed=42) -> (pd.DataFrame, pd.DataFrame, list):
         """
-        Splits the ratings into train and test sets based on the specified ratio.
+        Splits the ratings into train and test sets, k ratings of each user are in test set.
 
         Parameters:
         rankings (pd.DataFrame): All ratings
         n (float): The ratio for splitting the data.
 
         Returns:
-        tuple: A tuple containing the train and test sets and the selected user IDs.
-        """
-        selected_user_ids = RankingTest.get_test_user_ids(ratings, n)
-        train_set = ratings[ratings['userId'].isin(selected_user_ids) == False]
-        test_set = ratings[ratings['userId'].isin(selected_user_ids)]
-        return train_set, test_set, selected_user_ids
-
-    @staticmethod
-    def get_test_user_ids(ratings: pd.DataFrame, n=0.01) -> list:
-        """
-        Selects a subset of user IDs for testing based on the specified ratio.
-
-        Parameters:
-        ratings (pd.DataFrame): The user ratings.
-        n (float): The ratio for selecting user IDs.
-
-        Returns:
-        list: A list of selected user IDs.
-        """
-        user_ids = ratings['userId'].unique()
-        selected_user_ids = np.random.choice(user_ids, size=int(len(user_ids) * n), replace=False)
-        return selected_user_ids
-
-    @staticmethod
-    def split_user_ratings(user_ratings: pd.DataFrame, n=0.1, k = 10) -> (pd.Series, pd.Series):
-        """
-        Splits user ratings into train and test sets based on the specified ratio.
-
-        Parameters:
-        user_ratings (pd.Series): The user ratings.
-        n (float): The ratio for splitting the data.
-
-        Returns:
         tuple: A tuple containing the train and test sets.
         """
-        user_ratings = user_ratings.sample(frac=1, random_state=42)
-        if len(user_ratings) == 0:
-            return pd.Series(), pd.Series()
-        # make test set take at lest k items
-        if (len(user_ratings) * n) < k:
-            n = k / len(user_ratings)
-        split_index = int(len(user_ratings) * (1 - n))
-        train_set = user_ratings[:split_index]
-        test_set = user_ratings[split_index:]
-        return train_set, test_set
+        rng = np.random.default_rng(seed)
+
+        # Shuffle within each user and mark k items for test
+        df = ratings.copy()
+
+        # Assign a random number for sorting within each user
+        df['rand'] = rng.random(len(df))
+
+        # Rank rows within each user based on the random number
+        df['rank'] = df.groupby('userId')['rand'].rank(method='first', ascending=False)
+
+        # Split based on rank
+        test = df[df['rank'] <= k].drop(columns=['rand', 'rank'])
+        train = df[df['rank'] > k].drop(columns=['rand', 'rank'])
+
+        return train, test
 
     @staticmethod
     def calculate_ndcg(user_ratings: pd.DataFrame, ranking: pd.Series, k: int=10) -> float:
@@ -108,12 +81,12 @@ class RankingTest:
         Returns:
         float: The Spearman correlation coefficient.
         """
-        user_highest_rating = user_ratings['rating'].max()
-        threshold = 4 if user_highest_rating >= 4 else user_highest_rating - 0.5
+        # user_highest_rating = user_ratings['rating'].max()
+        # threshold = 4 if user_highest_rating >= 4 else user_highest_rating - 0.5
         merged = pd.merge(user_ratings, ranking, on='movieId', suffixes=('_rating', '_ranking'))
-        merged['rating'] = merged['rating'] > threshold
-        merged.at[merged.index[0], 'rating'] = True
-        merged.at[merged.index[-1], 'rating'] = False
+        # merged['rating'] = merged['rating'] > threshold
+        # merged.at[merged.index[0], 'rating'] = True
+        # merged.at[merged.index[-1], 'rating'] = False
 
         spearman_corr = merged['rating'].corr(merged['score'], method='spearman')
         return spearman_corr
@@ -130,8 +103,12 @@ class RankingTest:
         Returns:
         float: The Pearson correlation coefficient.
         """
+        # user_highest_rating = user_ratings['rating'].max()
+        # threshold = 4 if user_highest_rating >= 4 else user_highest_rating - 0.5
         merged = pd.merge(user_ratings, ranking, on='movieId', suffixes=('_rating', '_ranking'))
-
+        # merged['rating'] = merged['rating'] > threshold
+        # merged.at[merged.index[0], 'rating'] = True
+        # merged.at[merged.index[-1], 'rating'] = False
         pearson_corr = merged['rating'].corr(merged['score'], method='pearson')
         return pearson_corr
 
@@ -149,7 +126,7 @@ class RankingTest:
         """
         # Calculate RR
         rr = 0
-        for i, movie in enumerate(ranking.index):
+        for i, movie in enumerate(ranking['movieId']):
             if movie in user_ratings['movieId'].values:
                 rr = 1 / (i + 1)
                 break

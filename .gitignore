@@ -181,3 +181,5 @@ cython_debug/
 /data/ratings.csv
 /data/tags.csv
 /data/README.txt
+
+model

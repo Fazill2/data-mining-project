@@ -1,6 +1,9 @@
 from mlxtend.frequent_patterns import apriori, association_rules
 import pandas as pd
 from sklearn.cluster import KMeans
+from sklearn.ensemble import GradientBoostingRegressor
+from sklearn.linear_model import Ridge
+from surprise  import SVD, KNNBasic, Reader, Dataset
 from src.user_profile import UserProfileCreator
 import numpy as np
 
@@ -172,3 +175,132 @@ class AprioriSimplestRecommender:
         recommendations['movieId'] = recommendations.index
         recommendations.reset_index(drop=True, inplace=True)
         return recommendations
+
+class SimpleRegressionRecommender:
+    def __init__(self, item_data: pd.DataFrame, random_state=42):
+        self.item_data = item_data
+        self._train_ratings = None
+        self._train_profiles = None
+        self._train_profiles_clusters = None
+        self._centroids = None
+        self._cluster_rules = {}
+        self._kmeans = None
+
+    def recommend_for_user(self, user_ratings: pd.DataFrame, evaluation_ratings: pd.DataFrame = None, top_n=5, penalize_genres=False):
+        merged = user_ratings.merge(self.item_data, on='movieId')
+        genre_columns = [col for col in self.item_data.columns if col not in ['movieId', 'userId', 'rating']]
+        X = merged[genre_columns].values
+        y = merged['rating'].values
+
+        # Use Ridge regression for regularization
+        model = Ridge(alpha=1.0)
+        model.fit(X, y)
+        already_rated = set(user_ratings['movieId'])
+        candidate_movies = self.item_data.copy()[genre_columns]
+        candidate_movies = candidate_movies[~candidate_movies.index.isin(already_rated)]
+        if evaluation_ratings is not None:
+            candidate_movies = candidate_movies[candidate_movies.index.isin(evaluation_ratings['movieId'])]
+        predicted_ratings = model.predict(candidate_movies)
+        candidate_movies['score'] = predicted_ratings
+        candidate_movies.sort_values(by='score', ascending=False, inplace=True)
+        recommendations = candidate_movies.drop_duplicates().head(top_n)
+        recommendations['movieId'] = recommendations.index
+        recommendations.reset_index(drop=True, inplace=True)
+        return recommendations
+
+class GBKmeansRecommender:
+    def __init__(self, item_data: pd.DataFrame,  k=15, random_state=42):
+        self.item_data = item_data
+        self._train_ratings = None
+        self.k = k
+        self.random_state = random_state
+        self._train_profiles = None
+        self._train_profiles_clusters = None
+        self._centroids = None
+        self._cluster_models = {}
+        self._kmeans = None
+
+    def fit(self, train_ratings: pd.DataFrame):
+        self._train_ratings = train_ratings
+        self._train_profiles = UserProfileCreator.build_user_profiles(self.item_data, self._train_ratings)
+
+
+        self._kmeans = KMeans(n_clusters=self.k, random_state=self.random_state)
+        self._kmeans.fit(self._train_profiles)
+        self._train_profiles['cluster'] = self._kmeans.labels_
+
+        self._train_profiles_clusters = self._train_profiles.groupby('cluster')
+
+        for cluster_id in range(self.k):
+            self._train_model_for_cluster(cluster_id)
+
+    def _train_model_for_cluster(self, cluster_id):
+        cluster_user_ids = self._train_profiles[self._train_profiles['cluster'] == cluster_id].index
+        cluster_ratings = self._train_ratings[self._train_ratings['userId'].isin(cluster_user_ids)]
+
+        merged = cluster_ratings.merge(self.item_data, on='movieId')
+
+
+        genre_columns = [col for col in self.item_data.columns if col not in ['movieId', 'userId', 'rating']]
+        X = merged[genre_columns].values
+        y = merged['rating'].values
+        model = GradientBoostingRegressor(random_state=self.random_state)
+        model.fit(X, y)
+
+        self._cluster_models[cluster_id] = model
+
+    def recommend_for_user(self, user_ratings: pd.DataFrame, evaluation_ratings: pd.DataFrame = None, top_n=5):
+        user_profile = UserProfileCreator.build_user_profiles(self.item_data, user_ratings)
+        user_cluster = self._kmeans.predict(user_profile.values.reshape(1, -1))[0]
+
+        model = self._cluster_models.get(user_cluster)
+        already_rated = set(user_ratings['movieId'])
+        genre_columns = [col for col in self.item_data.columns if col not in ['movieId', 'userId', 'rating']]
+        candidate_movies = self.item_data.copy()[genre_columns]
+        candidate_movies = candidate_movies[~candidate_movies.index.isin(already_rated)]
+        if evaluation_ratings is not None:
+            candidate_movies = candidate_movies[candidate_movies.index.isin(evaluation_ratings['movieId'])]
+        predicted_ratings = model.predict(candidate_movies)
+        candidate_movies['score'] = predicted_ratings
+        candidate_movies.sort_values(by='score', ascending=False, inplace=True)
+        recommendations = candidate_movies.drop_duplicates().head(top_n)
+        recommendations['movieId'] = recommendations.index
+        recommendations.reset_index(drop=True, inplace=True)
+        return recommendations
+
+
+class SVDRecommender:
+    def __init__(self, item_data: pd.DataFrame, random_state=42, n_epochs=20, n_factors=100, lr_all=0.005, reg_all=0.02):
+        self.random_state = random_state
+        self.reader = Reader(rating_scale=(0.5, 5.0))
+        self.model = SVD(n_epochs=n_epochs, n_factors=n_factors, lr_all=lr_all, reg_all=reg_all, random_state=self.random_state)
+        self._train_ratings = None
+        genre_columns = [col for col in item_data.columns if col not in ['movieId', 'userId', 'rating']]
+        self.candidate_movies = item_data.copy()
+        self.candidate_movies['movieId'] = self.candidate_movies.index
+        self.candidate_movies.reset_index(drop=True, inplace=True)
+        self.candidate_movies = self.candidate_movies.drop(columns=genre_columns)
+
+    def fit(self, ratings: pd.DataFrame):
+        self._train_ratings = ratings
+        train_data = Dataset.load_from_df(self._train_ratings, self.reader)
+        trainset = train_data.build_full_trainset()
+        self.model.fit(trainset)
+
+    def recommend_for_user(self, user_ratings: pd.DataFrame, user_id, evaluation_ratings: pd.DataFrame = None, top_n=5):
+        already_rated = set(user_ratings['movieId'])
+        candidate_movies = self.candidate_movies.copy()
+        candidate_movies = candidate_movies[~candidate_movies.index.isin(already_rated)]
+        if evaluation_ratings is not None:
+            candidate_movies = candidate_movies[candidate_movies['movieId'].isin(evaluation_ratings['movieId'])]
+        scores = []
+        for _, row in candidate_movies.iterrows():
+            prediction = self.model.predict(uid=user_id, iid=row['movieId'])
+            score = prediction.est
+            scores.append(score)
+        candidate_movies['score'] = scores
+        candidate_movies.sort_values(by='score', ascending=False, inplace=True)
+        recommendations = candidate_movies.drop_duplicates().head(top_n)
+        recommendations.reset_index(drop=True, inplace=True)
+        return recommendations
+
