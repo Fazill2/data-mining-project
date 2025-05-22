@@ -3,7 +3,7 @@ import pandas as pd
 from sklearn.cluster import KMeans
 from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.linear_model import Ridge
-from surprise  import SVD, KNNBasic, Reader, Dataset
+from surprise  import SVD, KNNBasic, Reader, Dataset, SVDpp
 from src.user_profile import UserProfileCreator
 import numpy as np
 
@@ -208,7 +208,7 @@ class SimpleRegressionRecommender:
         recommendations.reset_index(drop=True, inplace=True)
         return recommendations
 
-class GBKmeansRecommender:
+class RidgeKmeansRecommender:
     def __init__(self, item_data: pd.DataFrame,  k=15, random_state=42):
         self.item_data = item_data
         self._train_ratings = None
@@ -244,7 +244,7 @@ class GBKmeansRecommender:
         genre_columns = [col for col in self.item_data.columns if col not in ['movieId', 'userId', 'rating']]
         X = merged[genre_columns].values
         y = merged['rating'].values
-        model = GradientBoostingRegressor(random_state=self.random_state)
+        model = Ridge(alpha=1.0)
         model.fit(X, y)
 
         self._cluster_models[cluster_id] = model
