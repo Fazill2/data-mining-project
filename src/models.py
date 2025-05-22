@@ -312,7 +312,7 @@ class KMeansRecommender:
         
     def fit(self, train_ratings: pd.DataFrame):
         # Create and train k-means model
-        genre_columns = [col for col in self.item_data.columns if col.startswith('genres_')]
+        genre_columns = [col for col in self.item_data.columns if col not in ['movieId', 'userId', 'rating']]
         X = self.item_data[genre_columns].values
         
         self.kmeans = KMeans(n_clusters=self.k, random_state=self.random_state)
@@ -348,9 +348,9 @@ class KMeansRecommender:
         
         recommendations = pd.DataFrame({
             'movieId': list(scores.keys()),
-            'prediction': list(scores.values())
+            'score': list(scores.values())
         })
         
-        recommendations = recommendations.sort_values('prediction', ascending=False)
+        recommendations = recommendations.sort_values('score', ascending=False)
         
         return recommendations.head(top_n)
