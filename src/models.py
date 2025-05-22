@@ -6,6 +6,7 @@ from sklearn.linear_model import Ridge
 from surprise  import SVD, KNNBasic, Reader, Dataset
 from src.user_profile import UserProfileCreator
 import numpy as np
+from src.models import AprioriKmeansRecommender, AprioriSimplestRecommender, SimpleRegressionRecommender, SVDRecommender, GBKmeansRecommender, KMeansRecommender
 
 class AprioriKmeansRecommender:
     def __init__(self, item_data: pd.DataFrame, min_support=0.5, min_confidence=0.5, k=15, random_state=42):
@@ -240,7 +241,6 @@ class GBKmeansRecommender:
 
         merged = cluster_ratings.merge(self.item_data, on='movieId')
 
-
         genre_columns = [col for col in self.item_data.columns if col not in ['movieId', 'userId', 'rating']]
         X = merged[genre_columns].values
         y = merged['rating'].values
@@ -267,7 +267,6 @@ class GBKmeansRecommender:
         recommendations['movieId'] = recommendations.index
         recommendations.reset_index(drop=True, inplace=True)
         return recommendations
-
 
 class SVDRecommender:
     def __init__(self, item_data: pd.DataFrame, random_state=42, n_epochs=20, n_factors=100, lr_all=0.005, reg_all=0.02):
@@ -304,3 +303,55 @@ class SVDRecommender:
         recommendations.reset_index(drop=True, inplace=True)
         return recommendations
 
+class KMeansRecommender:
+    def __init__(self, item_data: pd.DataFrame, k=15, random_state=42):
+        self.item_data = item_data
+        self.k = k
+        self.random_state = random_state
+        self.kmeans = None
+        self.clusters = None
+        
+    def fit(self, train_ratings: pd.DataFrame):
+        # Create and train k-means model
+        genre_columns = [col for col in self.item_data.columns if col.startswith('genres_')]
+        X = self.item_data[genre_columns].values
+        
+        self.kmeans = KMeans(n_clusters=self.k, random_state=self.random_state)
+        self.kmeans.fit(X)
+        # Assign each movie to its corresponding cluster
+        self.clusters = pd.Series(self.kmeans.labels_, index=self.item_data.index)
+        
+        return self
+    
+    def recommend_for_user(self, user_ratings: pd.DataFrame, evaluation_ratings: pd.DataFrame = None, top_n=5):
+        if self.kmeans is None:
+            raise ValueError("Model has not been trained yet. Call fit() method first.")
+        
+        user_movie_ids = user_ratings['movieId'].values
+        user_clusters = set()
+        for movie_id in user_movie_ids:
+            if movie_id in self.clusters.index:
+                user_clusters.add(self.clusters[movie_id])
+        
+        candidate_movies = self.item_data.copy()
+        if evaluation_ratings is not None:
+            candidate_movies = candidate_movies[candidate_movies.index.isin(evaluation_ratings['movieId'])]
+        
+        candidate_movies = candidate_movies[~candidate_movies.index.isin(user_movie_ids)]
+        scores = {}
+        for movie_id in candidate_movies.index:
+            movie_cluster = self.clusters[movie_id]
+            # Movies from the same clusters as already rated get 0.5 points
+            if movie_cluster in user_clusters:
+                scores[movie_id] = 0.5
+            else:
+                scores[movie_id] = 0.0
+        
+        recommendations = pd.DataFrame({
+            'movieId': list(scores.keys()),
+            'prediction': list(scores.values())
+        })
+        
+        recommendations = recommendations.sort_values('prediction', ascending=False)
+        
+        return recommendations.head(top_n)
