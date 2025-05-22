@@ -6,7 +6,6 @@ from sklearn.linear_model import Ridge
 from surprise  import SVD, KNNBasic, Reader, Dataset, SVDpp
 from src.user_profile import UserProfileCreator
 import numpy as np
-from src.models import AprioriKmeansRecommender, AprioriSimplestRecommender, SimpleRegressionRecommender, SVDRecommender, GBKmeansRecommender, KMeansRecommender
 
 class AprioriKmeansRecommender:
     def __init__(self, item_data: pd.DataFrame, min_support=0.5, min_confidence=0.5, k=15, random_state=42):
