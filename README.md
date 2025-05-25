@@ -33,6 +33,9 @@ Przygotować pipeline:
 
 # Do rozważenia
 Obecnie mamy bias na filmy z dużą liczbą gatunków
+latent semantic analysis
+pca
+user based
 
 # Prezentacja (w powerpoint)
 - zdefiniować problem
