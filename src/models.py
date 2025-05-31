@@ -3,12 +3,12 @@ import pandas as pd
 from sklearn.cluster import KMeans
 from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.linear_model import Ridge
-from surprise  import SVD, KNNBasic, Reader, Dataset, SVDpp
+from surprise  import SVD, KNNBasic, Reader, Dataset, SVDpp, CoClustering
 from src.user_profile import UserProfileCreator
 import numpy as np
 
 class AprioriKmeansRecommender:
-    def __init__(self, item_data: pd.DataFrame, min_support=0.5, min_confidence=0.5, k=15, random_state=42):
+    def __init__(self, item_data: pd.DataFrame, min_support=0.5, min_confidence=0.5, k=15, random_state=42, penalize_genres=False):
         self.min_support = min_support
         self.min_confidence = min_confidence
         self.item_data = item_data
@@ -20,6 +20,7 @@ class AprioriKmeansRecommender:
         self._centroids = None
         self._cluster_rules = {}
         self._kmeans = None
+        self.penalize_genres = penalize_genres;
 
     def fit(self, train_ratings: pd.DataFrame):
         self._train_ratings = train_ratings
@@ -65,7 +66,7 @@ class AprioriKmeansRecommender:
 
         return list(set(recommendations))
 
-    def recommend_for_user(self, user_ratings: pd.DataFrame, evaluation_ratings: pd.DataFrame = None, top_n=5, penalize_genres=False):
+    def recommend_for_user(self, user_ratings: pd.DataFrame, user_id, evaluation_ratings: pd.DataFrame = None, top_n=5):
         user_profile = UserProfileCreator.build_user_profiles(self.item_data, user_ratings)
         user_cluster = self._kmeans.predict(user_profile.values.reshape(1, -1))[0]
 
@@ -105,7 +106,7 @@ class AprioriKmeansRecommender:
         if evaluation_ratings is not None:
             candidate_movies = candidate_movies[candidate_movies.index.isin(evaluation_ratings['movieId'])]
         candidate_movies['score'] = 0
-        if penalize_genres:
+        if self.penalize_genres:
             candidate_movies['genre_count'] = np.sqrt(candidate_movies[genre_columns].sum(axis=1))
         else:
             candidate_movies['genre_count'] = 1
@@ -124,7 +125,7 @@ class AprioriKmeansRecommender:
         return self._cluster_rules
 
 class AprioriSimplestRecommender:
-    def __init__(self, item_data: pd.DataFrame, min_support=0.5, min_confidence=0.5, random_state=42):
+    def __init__(self, item_data: pd.DataFrame, min_support=0.5, min_confidence=0.5, random_state=42, penalize_genres=False):
         self.min_support = min_support
         self.min_confidence = min_confidence
         self.item_data = item_data
@@ -135,8 +136,9 @@ class AprioriSimplestRecommender:
         self._centroids = None
         self._cluster_rules = {}
         self._kmeans = None
+        self.penalize_genres = penalize_genres
 
-    def recommend_for_user(self, user_ratings: pd.DataFrame, evaluation_ratings: pd.DataFrame = None, top_n=5, penalize_genres=False):
+    def recommend_for_user(self, user_ratings: pd.DataFrame, user_id, evaluation_ratings: pd.DataFrame = None, top_n=5):
         merged = user_ratings.merge(self.item_data, on='movieId')
         user_highest_rating = user_ratings['rating'].max()
         threshold = 4 if user_highest_rating >= 4 else user_highest_rating - 0.5
@@ -162,7 +164,7 @@ class AprioriSimplestRecommender:
         if evaluation_ratings is not None:
             candidate_movies = candidate_movies[candidate_movies.index.isin(evaluation_ratings['movieId'])]
         candidate_movies['score'] = 0
-        if penalize_genres:
+        if self.penalize_genres:
             candidate_movies['genre_count'] = np.sqrt(candidate_movies[genre_columns].sum(axis=1))
         else:
             candidate_movies['genre_count'] = 1
@@ -186,7 +188,7 @@ class SimpleRegressionRecommender:
         self._cluster_rules = {}
         self._kmeans = None
 
-    def recommend_for_user(self, user_ratings: pd.DataFrame, evaluation_ratings: pd.DataFrame = None, top_n=5, penalize_genres=False):
+    def recommend_for_user(self, user_ratings: pd.DataFrame, user_id, evaluation_ratings: pd.DataFrame = None, top_n=5):
         merged = user_ratings.merge(self.item_data, on='movieId')
         genre_columns = [col for col in self.item_data.columns if col not in ['movieId', 'userId', 'rating']]
         X = merged[genre_columns].values
@@ -248,7 +250,7 @@ class RidgeKmeansRecommender:
 
         self._cluster_models[cluster_id] = model
 
-    def recommend_for_user(self, user_ratings: pd.DataFrame, evaluation_ratings: pd.DataFrame = None, top_n=5):
+    def recommend_for_user(self, user_ratings: pd.DataFrame, user_id, evaluation_ratings: pd.DataFrame = None, top_n=5):
         user_profile = UserProfileCreator.build_user_profiles(self.item_data, user_ratings)
         user_cluster = self._kmeans.predict(user_profile.values.reshape(1, -1))[0]
 
@@ -310,7 +312,7 @@ class KMeansRecommender:
         self.kmeans = None
         self.clusters = None
         
-    def fit(self, train_ratings: pd.DataFrame):
+    def fit(self, ratings: pd.DataFrame):
         # Create and train k-means model
         genre_columns = [col for col in self.item_data.columns if col not in ['movieId', 'userId', 'rating']]
         X = self.item_data[genre_columns].values
@@ -321,8 +323,8 @@ class KMeansRecommender:
         self.clusters = pd.Series(self.kmeans.labels_, index=self.item_data.index)
         
         return self
-    
-    def recommend_for_user(self, user_ratings: pd.DataFrame, evaluation_ratings: pd.DataFrame = None, top_n=5):
+
+    def recommend_for_user(self, user_ratings: pd.DataFrame, user_id, evaluation_ratings: pd.DataFrame = None, top_n=5):
         if self.kmeans is None:
             raise ValueError("Model has not been trained yet. Call fit() method first.")
         
@@ -354,3 +356,41 @@ class KMeansRecommender:
         recommendations = recommendations.sort_values('score', ascending=False)
         
         return recommendations.head(top_n)
+
+class CoClusteringRecommender:
+    def __init__(self, item_data: pd.DataFrame, random_state=42, n_epochs=20, n_cltr_u=3, n_cltr_i=3, verbose=False):
+        self.random_state = random_state
+        self.reader = Reader(rating_scale=(0.5, 5.0))
+        self.model = CoClustering(n_epochs=n_epochs, n_cltr_u=n_cltr_u, n_cltr_i=n_cltr_i, verbose=verbose)
+        self._train_ratings = None
+        genre_columns = [col for col in item_data.columns if col not in ['movieId', 'userId', 'rating']]
+        self.candidate_movies = item_data.copy()
+        self.candidate_movies['movieId'] = self.candidate_movies.index
+        self.candidate_movies.reset_index(drop=True, inplace=True)
+        self.candidate_movies = self.candidate_movies.drop(columns=genre_columns)
+
+    def fit(self, ratings: pd.DataFrame):
+        self._train_ratings = ratings
+        train_data = Dataset.load_from_df(self._train_ratings, self.reader)
+        trainset = train_data.build_full_trainset()
+        self.model.fit(trainset)
+
+    def recommend_for_user(self, user_ratings: pd.DataFrame, user_id, evaluation_ratings: pd.DataFrame = None, top_n=5):
+        already_rated = set(user_ratings['movieId'])
+        candidate_movies = self.candidate_movies.copy()
+        candidate_movies = candidate_movies[~candidate_movies.index.isin(already_rated)]
+        if evaluation_ratings is not None:
+            candidate_movies = candidate_movies[candidate_movies['movieId'].isin(evaluation_ratings['movieId'])]
+        scores = []
+        for _, row in candidate_movies.iterrows():
+            prediction = self.model.predict(uid=user_id, iid=row['movieId'])
+            score = prediction.est
+            scores.append(score)
+        candidate_movies['score'] = scores
+        candidate_movies.sort_values(by='score', ascending=False, inplace=True)
+        recommendations = candidate_movies.drop_duplicates().head(top_n)
+        recommendations.reset_index(drop=True, inplace=True)
+        return recommendations
+
+
+
